@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+
+@media print {
+
+  body * {
+    visibility: hidden;
+  }
+
+  .invoice-area,
+  .invoice-area * {
+    visibility: visible;
+  }
+
+  .invoice-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background: #f5f7fb;
+}
+
+* {
+  box-sizing: border-box;
+}
