@@ -43,30 +43,37 @@ type SellerProfile = {
   invoices: SavedInvoice[];
 };
 
-type AppData = {
-  sellers: SellerProfile[];
-  adminPassword: string;
-};
-
-const DEFAULT_APP_DATA: AppData = { sellers: [], adminPassword: "admin123" };
-
-function loadAppData(): AppData {
-  if (typeof window === "undefined") return DEFAULT_APP_DATA;
-  const raw = localStorage.getItem("gst_app_data");
-  return raw ? JSON.parse(raw) : DEFAULT_APP_DATA;
+// ── API Helpers ───────────────────────────────────────────────────────────────
+async function apiAuth(body: object) {
+  const res = await fetch("/api/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return res.json();
 }
 
-function saveAppData(data: AppData) {
-  localStorage.setItem("gst_app_data", JSON.stringify(data));
+async function apiSeller(body: object) {
+  const res = await fetch("/api/seller", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return res.json();
 }
 
+async function apiAdmin(body: object) {
+  const res = await fetch("/api/admin", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return res.json();
+}
+
+async function apiAdminGet() {
+  const res = await fetch("/api/admin");
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INVOICE FORM
+// ══════════════════════════════════════════════════════════════════════════════
 function InvoiceForm({
   sellerProfile,
   onSave,
   topBar,
 }: {
   sellerProfile: SellerProfile;
-  onSave: (invoice: SavedInvoice, updatedProfile: SellerProfile) => void;
+  onSave: (updatedProfile: SellerProfile) => void;
   topBar: React.ReactNode;
 }) {
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -109,25 +116,15 @@ function InvoiceForm({
 
   const [history, setHistory] = useState<SavedInvoice[]>(sellerProfile.invoices || []);
   const [invoiceFormat, setInvoiceFormat] = useState<1 | 2>(1);
+  const [loading, setLoading] = useState(false);
 
-  // ── NEW: Clear / New Invoice ───────────────────────────────────────────────
   const handleClearInvoice = () => {
     if (!confirm("Clear all invoice entries and start a new invoice?")) return;
-    setCustomerName("");
-    setBuyerAddress("");
-    setBuyerPhone("");
-    setBuyerGst("");
-    setBuyerState("");
-    setInvoiceNo("INV-2026-0001");
-    setInvoiceDate(new Date().toISOString().split("T")[0]);
+    setCustomerName(""); setBuyerAddress(""); setBuyerPhone(""); setBuyerGst(""); setBuyerState("");
+    setInvoiceNo("INV-2026-0001"); setInvoiceDate(new Date().toISOString().split("T")[0]);
     setInvoiceTime(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
-    setDueDate("");
-    setPoDate("");
-    setTransportName("");
-    setVehicleNo("");
-    setReceived(0);
-    setPrevBalance(0);
-    setPaymentMode("Credit");
+    setDueDate(""); setPoDate(""); setTransportName(""); setVehicleNo("");
+    setReceived(0); setPrevBalance(0); setPaymentMode("Credit");
     setProducts([{ name: "", hsn: "", qty: 1, price: 0, gst: 18, serialNo: "", description: "" }]);
   };
 
@@ -167,33 +164,38 @@ function InvoiceForm({
     return convert(Math.floor(num)) + " Rupees Only";
   };
 
-  const handleSaveInvoice = () => {
+  const handleSaveInvoice = async () => {
+    setLoading(true);
     const newInvoice: SavedInvoice = {
       invoiceNo, customerName, grandTotal, businessName,
       gstNumber, sellerState, buyerState, products, invoiceDate,
     };
-    const updatedHistory = [newInvoice, ...history];
-    setHistory(updatedHistory);
-    const updatedProfile: SellerProfile = {
-      ...sellerProfile,
-      businessName, gstNumber, sellerState, sellerAddress,
-      sellerPhone, sellerEmail, bankName, bankAccount, bankIfsc, bankHolder, logo,
-      invoices: updatedHistory,
-    };
-    onSave(newInvoice, updatedProfile);
-    alert("Invoice saved!");
+    const res = await apiSeller({ action: "saveInvoice", username: sellerProfile.username, invoice: newInvoice });
+    if (res.success) {
+      const updatedHistory = [newInvoice, ...history];
+      setHistory(updatedHistory);
+      onSave({ ...sellerProfile, invoices: updatedHistory });
+      alert("Invoice saved!");
+    } else {
+      alert("Failed to save invoice: " + res.message);
+    }
+    setLoading(false);
   };
 
-  const handleSaveProfile = () => {
-    const updatedProfile: SellerProfile = {
-      ...sellerProfile,
+  const handleSaveProfile = async () => {
+    setLoading(true);
+    const res = await apiSeller({
+      action: "saveProfile", username: sellerProfile.username,
       businessName, gstNumber, sellerState, sellerAddress,
       sellerPhone, sellerEmail, bankName, bankAccount, bankIfsc, bankHolder, logo,
-    };
-    const data = loadAppData();
-    const idx = data.sellers.findIndex(s => s.username === sellerProfile.username);
-    if (idx !== -1) { data.sellers[idx] = { ...data.sellers[idx], ...updatedProfile }; saveAppData(data); }
-    alert("Profile saved!");
+    });
+    if (res.success) {
+      onSave({ ...sellerProfile, businessName, gstNumber, sellerState, sellerAddress, sellerPhone, sellerEmail, bankName, bankAccount, bankIfsc, bankHolder, logo });
+      alert("Profile saved!");
+    } else {
+      alert("Failed to save profile: " + res.message);
+    }
+    setLoading(false);
   };
 
   const loadInvoice = (item: SavedInvoice) => {
@@ -203,11 +205,11 @@ function InvoiceForm({
     setInvoiceDate(item.invoiceDate); setInvoiceNo(item.invoiceNo);
   };
 
-  const deleteInvoice = (index: number) => {
-    const updated = [...history]; updated.splice(index, 1); setHistory(updated);
-    const data = loadAppData();
-    const idx = data.sellers.findIndex(s => s.username === sellerProfile.username);
-    if (idx !== -1) { data.sellers[idx].invoices = updated; saveAppData(data); }
+  const deleteInvoice = async (index: number) => {
+    const res = await apiSeller({ action: "deleteInvoice", username: sellerProfile.username, index });
+    if (res.success) {
+      const updated = [...history]; updated.splice(index, 1); setHistory(updated);
+    }
   };
 
   const downloadPDF = async () => {
@@ -232,29 +234,19 @@ function InvoiceForm({
   const btn = (bg: string): React.CSSProperties => ({
     width: "100%", backgroundColor: bg, color: "#fff", padding: "10px",
     borderRadius: "6px", fontWeight: 600, fontSize: "13px", border: "none",
-    cursor: "pointer", marginTop: "6px",
+    cursor: "pointer", marginTop: "6px", opacity: loading ? 0.7 : 1,
   });
-
-  const iTh: React.CSSProperties = {
-    border: "1px solid #000", padding: "5px 6px",
-    backgroundColor: "#d1d5db", fontWeight: 700,
-    fontSize: "11px", color: "#111", textAlign: "center",
-  };
-  const iTd: React.CSSProperties = {
-    border: "1px solid #000", padding: "5px 6px",
-    fontSize: "11px", color: "#111", verticalAlign: "top",
-  };
+  const iTh: React.CSSProperties = { border: "1px solid #000", padding: "5px 6px", backgroundColor: "#d1d5db", fontWeight: 700, fontSize: "11px", color: "#111", textAlign: "center" };
+  const iTd: React.CSSProperties = { border: "1px solid #000", padding: "5px 6px", fontSize: "11px", color: "#111", verticalAlign: "top" };
   const sRow: React.CSSProperties = { display: "flex", justifyContent: "space-between", padding: "2px 0", fontSize: "12px" };
 
   return (
     <div style={{ width: "100%", minHeight: "100vh", background: "#e5e7eb", fontFamily: "Arial, sans-serif" }}>
       {topBar}
-
       <div style={{ display: "grid", gridTemplateColumns: "340px 1fr 200px", gap: "14px", maxWidth: "1600px", margin: "0 auto", padding: "16px", alignItems: "start" }}>
 
-        {/* ══ LEFT PANEL ══ */}
+        {/* LEFT PANEL */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-
           <div style={card}>
             <p style={{ margin: "0 0 8px", fontWeight: 700, fontSize: "13px", color: "#374151" }}>🏢 Seller Info</p>
             <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
@@ -270,7 +262,7 @@ function InvoiceForm({
               <div><label style={lbl}>Email</label><input style={inp} value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} /></div>
               <div><label style={lbl}>GSTIN</label><input style={inp} value={gstNumber} onChange={e => setGstNumber(e.target.value)} /></div>
               <div><label style={lbl}>State</label><input style={inp} value={sellerState} onChange={e => setSellerState(e.target.value)} /></div>
-              <button type="button" style={btn("#16a34a")} onClick={handleSaveProfile}>💾 Save Profile</button>
+              <button type="button" style={btn("#16a34a")} onClick={handleSaveProfile} disabled={loading}>💾 Save Profile</button>
             </div>
           </div>
 
@@ -367,22 +359,15 @@ function InvoiceForm({
                 </button>
               ))}
             </div>
-            <button type="button" style={btn("#16a34a")} onClick={handleSaveInvoice}>💾 Save Invoice</button>
+            <button type="button" style={btn("#16a34a")} onClick={handleSaveInvoice} disabled={loading}>💾 {loading ? "Saving..." : "Save Invoice"}</button>
             <button type="button" style={btn("#0891b2")} onClick={() => window.print()}>🖨 Print Invoice</button>
             <button type="button" style={btn("#7c3aed")} onClick={downloadPDF}>⬇ Download PDF</button>
-            {/* ── NEW CLEAR BUTTON ── */}
             <button type="button" style={btn("#f59e0b")} onClick={handleClearInvoice}>🗑 Clear / New Invoice</button>
           </div>
-
         </div>
 
-        {/* ══ CENTER — INVOICE PREVIEW ══ */}
-        <div ref={invoiceRef} style={{
-          background: "#fff", padding: "24px 28px",
-          fontFamily: "Arial, sans-serif", fontSize: "12px",
-          color: "#111", width: "100%", boxSizing: "border-box",
-        }}>
-
+        {/* CENTER INVOICE */}
+        <div ref={invoiceRef} style={{ background: "#fff", padding: "24px 28px", fontFamily: "Arial, sans-serif", fontSize: "12px", color: "#111", width: "100%", boxSizing: "border-box" }}>
           {invoiceFormat === 1 ? (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
@@ -517,10 +502,9 @@ function InvoiceForm({
                   {dueDate && <div style={{ fontSize: "11px", color: "#374151" }}>Due: <strong>{dueDate}</strong></div>}
                 </div>
               </div>
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "14px" }}>
                 <div style={{ background: "#f8faff", borderRadius: "8px", padding: "10px", border: "1px solid #dbeafe" }}>
-                  <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "11px", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Bill To</div>
+                  <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "11px", marginBottom: "5px", textTransform: "uppercase" }}>Bill To</div>
                   <div style={{ fontWeight: 700, fontSize: "13px" }}>{customerName || "Customer Name"}</div>
                   {buyerAddress && <div style={{ fontSize: "11px", color: "#555", marginTop: "2px" }}>{buyerAddress}</div>}
                   {buyerPhone && <div style={{ fontSize: "11px", color: "#555" }}>📞 {buyerPhone}</div>}
@@ -528,14 +512,13 @@ function InvoiceForm({
                   {buyerState && <div style={{ fontSize: "11px", color: "#555" }}>State: {buyerState}</div>}
                 </div>
                 <div style={{ background: "#f8faff", borderRadius: "8px", padding: "10px", border: "1px solid #dbeafe" }}>
-                  <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "11px", marginBottom: "5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Shipment Info</div>
+                  <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "11px", marginBottom: "5px", textTransform: "uppercase" }}>Shipment Info</div>
                   {transportName && <div style={{ fontSize: "11px" }}>🚚 Transport: {transportName}</div>}
                   {vehicleNo && <div style={{ fontSize: "11px" }}>🔢 Vehicle: {vehicleNo}</div>}
                   {poDate && <div style={{ fontSize: "11px" }}>PO Date: {poDate}</div>}
                   <div style={{ fontSize: "11px", marginTop: "4px" }}>Payment: <strong>{paymentMode}</strong></div>
                 </div>
               </div>
-
               <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "14px" }}>
                 <thead>
                   <tr style={{ background: "#2563eb", color: "#fff" }}>
@@ -573,7 +556,6 @@ function InvoiceForm({
                   })}
                 </tbody>
               </table>
-
               <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "12px", marginBottom: "14px" }}>
                 <div style={{ fontSize: "11px" }}>
                   <div style={{ background: "#f8faff", borderRadius: "8px", padding: "10px", border: "1px solid #dbeafe", marginBottom: "8px" }}>
@@ -599,10 +581,8 @@ function InvoiceForm({
                     <span style={{ color: "#555" }}>Subtotal</span><span>₹ {subtotal.toFixed(2)}</span>
                   </div>
                   {sameState ? (
-                    <>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: "#555" }}>SGST @ {(products[0]?.gst ?? 0) / 2}%</span><span>₹ {sgst.toFixed(2)}</span></div>
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: "#555" }}>CGST @ {(products[0]?.gst ?? 0) / 2}%</span><span>₹ {cgst.toFixed(2)}</span></div>
-                    </>
+                    <><div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: "#555" }}>SGST @ {(products[0]?.gst ?? 0) / 2}%</span><span>₹ {sgst.toFixed(2)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: "#555" }}>CGST @ {(products[0]?.gst ?? 0) / 2}%</span><span>₹ {cgst.toFixed(2)}</span></div></>
                   ) : (
                     <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}><span style={{ color: "#555" }}>IGST @ {products[0]?.gst ?? 0}%</span><span>₹ {igst.toFixed(2)}</span></div>
                   )}
@@ -617,7 +597,6 @@ function InvoiceForm({
                   </div>
                 </div>
               </div>
-
               <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #e5e7eb", paddingTop: "16px" }}>
                 <div style={{ textAlign: "center", width: "160px" }}>
                   <div style={{ fontSize: "11px", color: "#374151" }}>For : <strong>{businessName || "Business Name"}</strong></div>
@@ -628,7 +607,7 @@ function InvoiceForm({
           )}
         </div>
 
-        {/* ══ RIGHT — HISTORY ══ */}
+        {/* RIGHT HISTORY */}
         <div style={{ backgroundColor: "#fff", padding: "16px", borderRadius: "12px", boxShadow: "0 2px 8px rgba(0,0,0,0.12)", display: "flex", flexDirection: "column", gap: "8px" }}>
           <h3 style={{ margin: "0 0 6px", color: "#111827", fontSize: "13px" }}>📋 Invoice History</h3>
           {history.length === 0 ? (
@@ -648,7 +627,6 @@ function InvoiceForm({
             ))
           )}
         </div>
-
       </div>
     </div>
   );
@@ -657,14 +635,12 @@ function InvoiceForm({
 // ══════════════════════════════════════════════════════════════════════════════
 // LOGIN SCREEN
 // ══════════════════════════════════════════════════════════════════════════════
-function LoginScreen({ onLogin, onAdmin }: {
-  onLogin: (seller: SellerProfile) => void;
-  onAdmin: () => void;
-}) {
+function LoginScreen({ onLogin, onAdmin }: { onLogin: (seller: SellerProfile) => void; onAdmin: () => void; }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const [regUser, setRegUser] = useState("");
   const [regPass, setRegPass] = useState("");
   const [regBusiness, setRegBusiness] = useState("");
@@ -674,26 +650,21 @@ function LoginScreen({ onLogin, onAdmin }: {
   const [regPhone, setRegPhone] = useState("");
   const [regEmail, setRegEmail] = useState("");
 
-  const handleLogin = () => {
-    setError("");
-    const data = loadAppData();
-    if (username === "admin" && password === data.adminPassword) { onAdmin(); return; }
-    const seller = data.sellers.find(s => s.username === username && s.password === password);
-    if (seller) { onLogin(seller); } else { setError("Invalid username or password."); }
+  const handleLogin = async () => {
+    setError(""); setLoading(true);
+    const res = await apiAuth({ action: "login", username, password });
+    setLoading(false);
+    if (res.success && res.role === "admin") { onAdmin(); return; }
+    if (res.success && res.role === "seller") { onLogin(res.seller); return; }
+    setError(res.message || "Invalid username or password.");
   };
 
-  const handleRegister = () => {
-    setError("");
-    if (!regUser || !regPass || !regBusiness) { setError("Username, password and business name are required."); return; }
-    const data = loadAppData();
-    if (data.sellers.find(s => s.username === regUser)) { setError("Username already exists."); return; }
-    const newSeller: SellerProfile = {
-      username: regUser, password: regPass, businessName: regBusiness,
-      gstNumber: regGst, sellerState: regState, sellerAddress: regAddress,
-      sellerPhone: regPhone, sellerEmail: regEmail,
-      bankName: "", bankAccount: "", bankIfsc: "", bankHolder: "", logo: "", invoices: [],
-    };
-    data.sellers.push(newSeller); saveAppData(data); onLogin(newSeller);
+  const handleRegister = async () => {
+    setError(""); setLoading(true);
+    const res = await apiAuth({ action: "register", username: regUser, password: regPass, businessName: regBusiness, gstNumber: regGst, sellerState: regState, sellerAddress: regAddress, sellerPhone: regPhone, sellerEmail: regEmail });
+    setLoading(false);
+    if (res.success) { onLogin(res.seller); return; }
+    setError(res.message || "Registration failed.");
   };
 
   const inp: React.CSSProperties = { width: "100%", border: "1px solid #d1d5db", padding: "10px 14px", borderRadius: "8px", fontSize: "14px", color: "#111827", backgroundColor: "#fff", boxSizing: "border-box", marginTop: "4px" };
@@ -720,7 +691,7 @@ function LoginScreen({ onLogin, onAdmin }: {
           <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div><label style={lbl}>Username</label><input style={inp} placeholder="Enter username" value={username} onChange={e => setUsername(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} /></div>
             <div><label style={lbl}>Password</label><input style={inp} type="password" placeholder="Enter password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleLogin()} /></div>
-            <button type="button" onClick={handleLogin} style={{ width: "100%", background: "#2563eb", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>Login →</button>
+            <button type="button" onClick={handleLogin} disabled={loading} style={{ width: "100%", background: "#2563eb", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Logging in..." : "Login →"}</button>
             <button type="button" onClick={onAdmin} style={{ width: "100%", background: "#f3f4f6", color: "#374151", padding: "10px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "13px", cursor: "pointer" }}>🔐 Admin Login</button>
           </div>
         ) : (
@@ -737,7 +708,7 @@ function LoginScreen({ onLogin, onAdmin }: {
               <div><label style={lbl}>Phone</label><input style={inp} placeholder="98XXXXXXXX" value={regPhone} onChange={e => setRegPhone(e.target.value)} /></div>
               <div><label style={lbl}>Email</label><input style={inp} placeholder="email@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} /></div>
             </div>
-            <button type="button" onClick={handleRegister} style={{ width: "100%", background: "#16a34a", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>Register & Login →</button>
+            <button type="button" onClick={handleRegister} disabled={loading} style={{ width: "100%", background: "#16a34a", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer", opacity: loading ? 0.7 : 1 }}>{loading ? "Registering..." : "Register & Login →"}</button>
           </div>
         )}
       </div>
@@ -752,35 +723,36 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   const [password, setPassword] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [error, setError] = useState("");
-  const [appData, setAppData] = useState<AppData>(loadAppData());
+  const [sellers, setSellers] = useState<SellerProfile[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<SellerProfile | null>(null);
   const [newAdminPass, setNewAdminPass] = useState("");
   const [activeTab, setActiveTab] = useState<"dashboard" | "invoice">("dashboard");
   const [invoiceSeller, setInvoiceSeller] = useState<SellerProfile | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleAdminLogin = () => {
-    const data = loadAppData();
-    if (password === data.adminPassword) { setAuthenticated(true); } else { setError("Wrong admin password."); }
+  const handleAdminLogin = async () => {
+    setLoading(true);
+    const res = await apiAdmin({ action: "verifyAdmin", password });
+    setLoading(false);
+    if (res.success) {
+      setAuthenticated(true);
+      const data = await apiAdminGet();
+      if (data.success) setSellers(data.sellers);
+    } else {
+      setError("Wrong admin password.");
+    }
   };
 
-  const deleteSeller = (username: string) => {
+  const deleteSeller = async (username: string) => {
     if (!confirm(`Delete seller "${username}"?`)) return;
-    const data = loadAppData();
-    data.sellers = data.sellers.filter(s => s.username !== username);
-    saveAppData(data); setAppData({ ...data });
+    const res = await apiAdmin({ action: "deleteSeller", username });
+    if (res.success) setSellers(sellers.filter(s => s.username !== username));
   };
 
-  const changeAdminPassword = () => {
+  const changeAdminPassword = async () => {
     if (!newAdminPass) return;
-    const data = loadAppData();
-    data.adminPassword = newAdminPass; saveAppData(data);
-    alert("Admin password updated!"); setNewAdminPass("");
-  };
-
-  const handleAdminInvoiceSave = (_invoice: SavedInvoice, updatedProfile: SellerProfile) => {
-    const data = loadAppData();
-    const idx = data.sellers.findIndex(s => s.username === updatedProfile.username);
-    if (idx !== -1) { data.sellers[idx] = updatedProfile; saveAppData(data); setAppData({ ...data }); }
+    const res = await apiAdmin({ action: "changePassword", newPassword: newAdminPass });
+    if (res.success) { alert("Admin password updated!"); setNewAdminPass(""); }
   };
 
   const inp: React.CSSProperties = { width: "100%", border: "1px solid #d1d5db", padding: "10px 14px", borderRadius: "8px", fontSize: "14px", color: "#111827", backgroundColor: "#fff", boxSizing: "border-box", marginTop: "4px" };
@@ -795,7 +767,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
           </div>
           {error && <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "8px", padding: "10px", marginBottom: "16px", color: "#dc2626", fontSize: "13px" }}>⚠️ {error}</div>}
           <input style={inp} type="password" placeholder="Admin password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && handleAdminLogin()} />
-          <button type="button" onClick={handleAdminLogin} style={{ width: "100%", background: "#7c3aed", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer", marginTop: "12px" }}>Enter Admin Panel</button>
+          <button type="button" onClick={handleAdminLogin} disabled={loading} style={{ width: "100%", background: "#7c3aed", color: "#fff", padding: "12px", borderRadius: "8px", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer", marginTop: "12px", opacity: loading ? 0.7 : 1 }}>{loading ? "Verifying..." : "Enter Admin Panel"}</button>
           <button type="button" onClick={onLogout} style={{ width: "100%", background: "#f3f4f6", color: "#374151", padding: "10px", borderRadius: "8px", border: "none", fontWeight: 600, fontSize: "13px", cursor: "pointer", marginTop: "8px" }}>← Back to Login</button>
         </div>
       </div>
@@ -806,7 +778,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
     return (
       <InvoiceForm
         sellerProfile={invoiceSeller}
-        onSave={handleAdminInvoiceSave}
+        onSave={() => {}}
         topBar={
           <div style={{ background: "#7c3aed", color: "#fff", padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -816,15 +788,15 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
                 <div style={{ fontSize: "11px", opacity: 0.8 }}>Admin Mode</div>
               </div>
             </div>
-            <button type="button" onClick={() => setActiveTab("dashboard")}
-              style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>
-              ← Back to Admin
-            </button>
+            <button type="button" onClick={() => setActiveTab("dashboard")} style={{ background: "rgba(255,255,255,0.2)", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "13px" }}>← Back to Admin</button>
           </div>
         }
       />
     );
   }
+
+  const totalInvoices = sellers.reduce((s, sel) => s + (sel.invoices?.length || 0), 0);
+  const totalRevenue = sellers.reduce((s, sel) => s + (sel.invoices || []).reduce((a, inv) => a + inv.grandTotal, 0), 0);
 
   return (
     <div style={{ minHeight: "100vh", background: "#f3f4f6", fontFamily: "Arial, sans-serif" }}>
@@ -839,9 +811,9 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
       <div style={{ maxWidth: "1100px", margin: "24px auto", padding: "0 20px", display: "flex", flexDirection: "column", gap: "20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
           {[
-            { label: "Total Sellers", value: appData.sellers.length, color: "#2563eb" },
-            { label: "Total Invoices", value: appData.sellers.reduce((s, sel) => s + sel.invoices.length, 0), color: "#16a34a" },
-            { label: "Total Revenue", value: "₹" + appData.sellers.reduce((s, sel) => s + sel.invoices.reduce((a, inv) => a + inv.grandTotal, 0), 0).toFixed(0), color: "#7c3aed" },
+            { label: "Total Sellers", value: sellers.length, color: "#2563eb" },
+            { label: "Total Invoices", value: totalInvoices, color: "#16a34a" },
+            { label: "Total Revenue", value: "₹" + totalRevenue.toFixed(0), color: "#7c3aed" },
           ].map(stat => (
             <div key={stat.label} style={{ background: "#fff", borderRadius: "12px", padding: "20px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", borderLeft: `4px solid ${stat.color}` }}>
               <div style={{ fontSize: "28px", fontWeight: 800, color: stat.color }}>{stat.value}</div>
@@ -852,7 +824,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
 
         <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
           <h2 style={{ margin: "0 0 16px", fontSize: "16px", fontWeight: 700 }}>All Sellers</h2>
-          {appData.sellers.length === 0 ? (
+          {sellers.length === 0 ? (
             <p style={{ color: "#9ca3af", fontSize: "14px" }}>No sellers registered yet.</p>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -864,20 +836,17 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
                 </tr>
               </thead>
               <tbody>
-                {appData.sellers.map(seller => (
+                {sellers.map(seller => (
                   <tr key={seller.username} style={{ borderBottom: "1px solid #f3f4f6" }}>
                     <td style={{ padding: "10px 12px", fontSize: "13px", fontWeight: 600 }}>{seller.username}</td>
                     <td style={{ padding: "10px 12px", fontSize: "13px" }}>{seller.businessName}</td>
                     <td style={{ padding: "10px 12px", fontSize: "13px" }}>{seller.gstNumber || "—"}</td>
                     <td style={{ padding: "10px 12px", fontSize: "13px" }}>{seller.sellerState || "—"}</td>
-                    <td style={{ padding: "10px 12px", fontSize: "13px" }}>{seller.invoices.length}</td>
+                    <td style={{ padding: "10px 12px", fontSize: "13px" }}>{seller.invoices?.length || 0}</td>
                     <td style={{ padding: "10px 12px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      <button type="button" onClick={() => setSelectedSeller(seller)}
-                        style={{ background: "#2563eb", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>View</button>
-                      <button type="button" onClick={() => { setInvoiceSeller(seller); setActiveTab("invoice"); }}
-                        style={{ background: "#16a34a", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>🧾 Make Bill</button>
-                      <button type="button" onClick={() => deleteSeller(seller.username)}
-                        style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>Delete</button>
+                      <button type="button" onClick={() => setSelectedSeller(seller)} style={{ background: "#2563eb", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>View</button>
+                      <button type="button" onClick={() => { setInvoiceSeller(seller); setActiveTab("invoice"); }} style={{ background: "#16a34a", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>🧾 Make Bill</button>
+                      <button type="button" onClick={() => deleteSeller(seller.username)} style={{ background: "#ef4444", color: "#fff", border: "none", padding: "4px 10px", borderRadius: "4px", fontSize: "12px", cursor: "pointer" }}>Delete</button>
                     </td>
                   </tr>
                 ))}
@@ -892,7 +861,7 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
               <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 700 }}>📋 {selectedSeller.businessName} — Invoice History</h2>
               <button type="button" onClick={() => setSelectedSeller(null)} style={{ background: "#f3f4f6", border: "none", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "13px" }}>✕ Close</button>
             </div>
-            {selectedSeller.invoices.length === 0 ? (
+            {(selectedSeller.invoices?.length || 0) === 0 ? (
               <p style={{ color: "#9ca3af", fontSize: "14px" }}>No invoices yet.</p>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -930,17 +899,16 @@ function AdminPanel({ onLogout }: { onLogout: () => void }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// SELLER APP
+// ══════════════════════════════════════════════════════════════════════════════
 function SellerApp({ seller, onLogout }: { seller: SellerProfile; onLogout: () => void }) {
-  const handleSave = (_invoice: SavedInvoice, updatedProfile: SellerProfile) => {
-    const data = loadAppData();
-    const idx = data.sellers.findIndex(s => s.username === seller.username);
-    if (idx !== -1) { data.sellers[idx] = updatedProfile; saveAppData(data); }
-  };
+  const [currentSeller, setCurrentSeller] = useState(seller);
 
   return (
     <InvoiceForm
-      sellerProfile={seller}
-      onSave={handleSave}
+      sellerProfile={currentSeller}
+      onSave={(updated) => setCurrentSeller(updated)}
       topBar={
         <div style={{ background: "#1e3a5f", color: "#fff", padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -957,6 +925,9 @@ function SellerApp({ seller, onLogout }: { seller: SellerProfile; onLogout: () =
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ROOT
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Home() {
   const [screen, setScreen] = useState<"login" | "admin" | "app">("login");
   const [currentSeller, setCurrentSeller] = useState<SellerProfile | null>(null);
