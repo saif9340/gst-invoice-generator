@@ -1,50 +1,202 @@
-import mongoose from "mongoose";
+import { Schema, model, models } from "mongoose";
 
-const ProductSchema = new mongoose.Schema({
-  name: String,
-  hsn: String,
-  qty: Number,
-  price: Number,
-  gst: Number,
-  serialNo: String,
-  description: String,
+/* =========================
+   PRODUCT SCHEMA
+========================= */
+
+const ProductSchema = new Schema({
+  name: {
+    type: String,
+    default: "",
+  },
+
+  hsn: {
+    type: String,
+    default: "",
+  },
+
+  qty: {
+    type: Number,
+    default: 1,
+  },
+
+  price: {
+    type: Number,
+    default: 0,
+  },
+
+  gst: {
+    type: Number,
+    default: 0,
+  },
+
+  serialNo: {
+    type: String,
+    default: "",
+  },
+
+  description: {
+    type: String,
+    default: "",
+  },
 });
 
-const InvoiceSchema = new mongoose.Schema({
-  invoiceNo: String,
-  customerName: String,
-  grandTotal: Number,
-  businessName: String,
-  gstNumber: String,
-  sellerState: String,
-  buyerState: String,
+/* =========================
+   INVOICE SCHEMA
+========================= */
+
+const InvoiceSchema = new Schema({
+  invoiceNo: {
+    type: String,
+    default: "",
+  },
+
+  customerName: {
+    type: String,
+    default: "",
+  },
+
+  grandTotal: {
+    type: Number,
+    default: 0,
+  },
+
+  businessName: {
+    type: String,
+    default: "",
+  },
+
+  gstNumber: {
+    type: String,
+    default: "",
+  },
+
+  sellerState: {
+    type: String,
+    default: "",
+  },
+
+  buyerState: {
+    type: String,
+    default: "",
+  },
+
   products: [ProductSchema],
-  invoiceDate: String,
-  createdAt: { type: Date, default: Date.now },
+
+  invoiceDate: {
+    type: String,
+    default: "",
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
-const SellerSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  businessName: { type: String, default: "" },
-  gstNumber: { type: String, default: "" },
-  sellerState: { type: String, default: "" },
-  sellerAddress: { type: String, default: "" },
-  sellerPhone: { type: String, default: "" },
-  sellerEmail: { type: String, default: "" },
-  bankName: { type: String, default: "" },
-  bankAccount: { type: String, default: "" },
-  bankIfsc: { type: String, default: "" },
-  bankHolder: { type: String, default: "" },
-  logo: { type: String, default: "" },
+/* =========================
+   SELLER SCHEMA
+========================= */
+
+const SellerSchema = new Schema({
+  username: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+
+  password: {
+    type: String,
+    required: true,
+  },
+
+  businessName: {
+    type: String,
+    default: "",
+  },
+
+  gstNumber: {
+    type: String,
+    default: "",
+  },
+
+  sellerState: {
+    type: String,
+    default: "",
+  },
+
+  sellerAddress: {
+    type: String,
+    default: "",
+  },
+
+  sellerPhone: {
+    type: String,
+    default: "",
+  },
+
+  sellerEmail: {
+    type: String,
+    default: "",
+  },
+
+  bankName: {
+    type: String,
+    default: "",
+  },
+
+  bankAccount: {
+    type: String,
+    default: "",
+  },
+
+  bankIfsc: {
+    type: String,
+    default: "",
+  },
+
+  bankHolder: {
+    type: String,
+    default: "",
+  },
+
+  logo: {
+    type: String,
+    default: "",
+  },
+
   invoices: [InvoiceSchema],
-  createdAt: { type: Date, default: Date.now },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
-const AppSettingsSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true },
-  value: { type: String, required: true },
+/* =========================
+   APP SETTINGS SCHEMA
+========================= */
+
+const AppSettingsSchema = new Schema({
+  key: {
+    type: String,
+    required: true,
+    unique: true,
+  },
+
+  value: {
+    type: String,
+    default: "",
+  },
 });
 
-export const Seller = mongoose.models.Seller || mongoose.model("Seller", SellerSchema);
-export const AppSettings = mongoose.models.AppSettings || mongoose.model("AppSettings", AppSettingsSchema);
+/* =========================
+   EXPORT MODELS
+========================= */
+
+export const Seller =
+  models.Seller || model("Seller", SellerSchema);
+
+export const AppSettings =
+  models.AppSettings ||
+  model("AppSettings", AppSettingsSchema);

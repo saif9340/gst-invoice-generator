@@ -4,11 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import connectDB from "@/lib/mongodb";
 import { Seller, AppSettings } from "@/lib/models";
 
+const SellerModel: any = Seller;
+const AppSettingsModel: any = AppSettings;
+
 export async function GET() {
   try {
     await connectDB();
 
-    const sellers = await Seller.find({});
+    const sellers = await SellerModel.find();
 
     return NextResponse.json({
       success: true,
@@ -27,12 +30,14 @@ export async function POST(req: NextRequest) {
     await connectDB();
 
     const body = await req.json();
+
     const { action } = body;
 
-    // CHANGE PASSWORD
     if (action === "changePassword") {
-      await AppSettings.findOneAndUpdate(
-        { key: "adminPassword" },
+      await AppSettingsModel.findOneAndUpdate(
+        {
+          key: "adminPassword",
+        },
         {
           key: "adminPassword",
           value: body.newPassword,
@@ -48,9 +53,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // DELETE SELLER
     if (action === "deleteSeller") {
-      await Seller.deleteOne({
+      await SellerModel.deleteOne({
         username: body.username,
       });
 
@@ -59,13 +63,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // VERIFY ADMIN
     if (action === "verifyAdmin") {
-      const adminSettings = await AppSettings.findOne({
-        key: "adminPassword",
-      });
+      const adminSettings =
+        await AppSettingsModel.findOne({
+          key: "adminPassword",
+        });
 
-      const adminPassword = adminSettings?.value || "admin123";
+      const adminPassword =
+        adminSettings?.value || "admin123";
 
       if (body.password === adminPassword) {
         return NextResponse.json({
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: false,
-        message: "Wrong admin password.",
+        message: "Wrong admin password",
       });
     }
 
