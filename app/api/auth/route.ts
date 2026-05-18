@@ -10,8 +10,50 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const username = body.username;
-    const password = body.password;
+    const {
+      action,
+      username,
+      password,
+      businessName,
+      gstNumber,
+      sellerState,
+      sellerAddress,
+      sellerPhone,
+      sellerEmail,
+    } = body;
+
+    // =========================
+    // REGISTER
+    // =========================
+
+    if (action === "register") {
+      const existingSeller = await Seller.findOne({
+        username,
+      } as any);
+
+      if (existingSeller) {
+        return NextResponse.json({
+          success: false,
+          message: "Username already exists",
+        });
+      }
+
+      const seller = await Seller.create({
+        username,
+        password,
+        businessName,
+        gstNumber,
+        sellerState,
+        sellerAddress,
+        sellerPhone,
+        sellerEmail,
+      });
+
+      return NextResponse.json({
+        success: true,
+        seller,
+      });
+    }
 
     // =========================
     // ADMIN LOGIN
@@ -40,10 +82,12 @@ export async function POST(req: NextRequest) {
     // SELLER LOGIN
     // =========================
 
-    const seller = await Seller.findOne({
-  username,
-  password,
-} as any);
+    const seller = await Seller.findOne(
+      {
+        username,
+        password,
+      } as any
+    );
 
     if (!seller) {
       return NextResponse.json({
