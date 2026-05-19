@@ -304,8 +304,25 @@ function InvoiceForm({
                   <option>Credit</option><option>Cash</option><option>UPI</option><option>NEFT</option><option>Cheque</option>
                 </select>
               </div>
-              <div><label style={lbl}>Amount Received (₹)</label><input style={inp} type="number" value={received} onChange={e => setReceived(Number(e.target.value))} /></div>
-              <div><label style={lbl}>Previous Balance (₹)</label><input style={inp} type="number" value={prevBalance} onChange={e => setPrevBalance(Number(e.target.value))} /></div>
+              {/* ── FIXED: onFocus selects all so zero clears immediately ── */}
+              <div><label style={lbl}>Amount Received (₹)</label>
+                <input
+                  style={inp}
+                  type="number"
+                  value={received}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setReceived(Number(e.target.value))}
+                />
+              </div>
+              <div><label style={lbl}>Previous Balance (₹)</label>
+                <input
+                  style={inp}
+                  type="number"
+                  value={prevBalance}
+                  onFocus={e => e.target.select()}
+                  onChange={e => setPrevBalance(Number(e.target.value))}
+                />
+              </div>
             </div>
           </div>
 
@@ -336,13 +353,44 @@ function InvoiceForm({
                 <input style={inp} placeholder="Product Name" value={item.name} onChange={e => updateProduct(index, "name", e.target.value)} />
                 <input style={inp} placeholder="Description / Brand / Specs" value={item.description || ""} onChange={e => updateProduct(index, "description", e.target.value)} />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
-                  <div><label style={lbl}>HSN/SAC</label><input style={inp} value={item.hsn} onChange={e => updateProduct(index, "hsn", e.target.value)} /></div>
-                  <div><label style={lbl}>Qty</label><input style={inp} type="number" value={item.qty} onChange={e => updateProduct(index, "qty", Number(e.target.value))} /></div>
-                  <div><label style={lbl}>Price ₹</label><input style={inp} type="number" value={item.price} onChange={e => updateProduct(index, "price", Number(e.target.value))} /></div>
+                  <div><label style={lbl}>HSN/SAC</label>
+                    <input style={inp} value={item.hsn} onChange={e => updateProduct(index, "hsn", e.target.value)} />
+                  </div>
+                  {/* ── FIXED: Qty ── */}
+                  <div><label style={lbl}>Qty</label>
+                    <input
+                      style={inp}
+                      type="number"
+                      value={item.qty}
+                      onFocus={e => e.target.select()}
+                      onChange={e => updateProduct(index, "qty", Number(e.target.value))}
+                    />
+                  </div>
+                  {/* ── FIXED: Price ── */}
+                  <div><label style={lbl}>Price ₹</label>
+                    <input
+                      style={inp}
+                      type="number"
+                      value={item.price}
+                      onFocus={e => e.target.select()}
+                      onChange={e => updateProduct(index, "price", Number(e.target.value))}
+                    />
+                  </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                  <div><label style={lbl}>GST %</label><input style={inp} type="number" value={item.gst} onChange={e => updateProduct(index, "gst", Number(e.target.value))} /></div>
-                  <div><label style={lbl}>Serial No.</label><input style={inp} placeholder="optional" value={item.serialNo || ""} onChange={e => updateProduct(index, "serialNo", e.target.value)} /></div>
+                  {/* ── FIXED: GST % ── */}
+                  <div><label style={lbl}>GST %</label>
+                    <input
+                      style={inp}
+                      type="number"
+                      value={item.gst}
+                      onFocus={e => e.target.select()}
+                      onChange={e => updateProduct(index, "gst", Number(e.target.value))}
+                    />
+                  </div>
+                  <div><label style={lbl}>Serial No.</label>
+                    <input style={inp} placeholder="optional" value={item.serialNo || ""} onChange={e => updateProduct(index, "serialNo", e.target.value)} />
+                  </div>
                 </div>
               </div>
             ))}
