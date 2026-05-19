@@ -1,202 +1,101 @@
-import { Schema, model, models } from "mongoose";
+import mongoose, { Schema, Document, Model } from "mongoose";
 
-/* =========================
-   PRODUCT SCHEMA
-========================= */
+// ── AppSettings ──────────────────────────────────────────────────────────────
+export interface IAppSettings extends Document {
+  key: string;
+  value: string;
+}
 
-const ProductSchema = new Schema({
-  name: {
-    type: String,
-    default: "",
-  },
-
-  hsn: {
-    type: String,
-    default: "",
-  },
-
-  qty: {
-    type: Number,
-    default: 1,
-  },
-
-  price: {
-    type: Number,
-    default: 0,
-  },
-
-  gst: {
-    type: Number,
-    default: 0,
-  },
-
-  serialNo: {
-    type: String,
-    default: "",
-  },
-
-  description: {
-    type: String,
-    default: "",
-  },
+const AppSettingsSchema = new Schema<IAppSettings>({
+  key:   { type: String, required: true, unique: true },
+  value: { type: String, required: true },
 });
 
-/* =========================
-   INVOICE SCHEMA
-========================= */
+export const AppSettings: Model<IAppSettings> =
+  mongoose.models.AppSettings ||
+  mongoose.model<IAppSettings>("AppSettings", AppSettingsSchema);
 
-const InvoiceSchema = new Schema({
-  invoiceNo: {
-    type: String,
-    default: "",
-  },
+// ── Product ───────────────────────────────────────────────────────────────────
+export interface IProduct {
+  name:        string;
+  hsn:         string;
+  qty:         number;
+  price:       number;
+  gst:         number;
+  serialNo?:   string;
+  description?: string;
+}
 
-  customerName: {
-    type: String,
-    default: "",
-  },
-
-  grandTotal: {
-    type: Number,
-    default: 0,
-  },
-
-  businessName: {
-    type: String,
-    default: "",
-  },
-
-  gstNumber: {
-    type: String,
-    default: "",
-  },
-
-  sellerState: {
-    type: String,
-    default: "",
-  },
-
-  buyerState: {
-    type: String,
-    default: "",
-  },
-
-  products: [ProductSchema],
-
-  invoiceDate: {
-    type: String,
-    default: "",
-  },
-
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+const ProductSchema = new Schema<IProduct>({
+  name:        { type: String, default: "" },
+  hsn:         { type: String, default: "" },
+  qty:         { type: Number, default: 1 },
+  price:       { type: Number, default: 0 },
+  gst:         { type: Number, default: 18 },
+  serialNo:    { type: String, default: "" },
+  description: { type: String, default: "" },
 });
 
-/* =========================
-   SELLER SCHEMA
-========================= */
+// ── Invoice ───────────────────────────────────────────────────────────────────
+export interface IInvoice {
+  invoiceNo:    string;
+  customerName: string;
+  grandTotal:   number;
+  businessName: string;
+  gstNumber:    string;
+  sellerState:  string;
+  buyerState:   string;
+  products:     IProduct[];
+  invoiceDate:  string;
+}
 
-const SellerSchema = new Schema({
-  username: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-
-  password: {
-    type: String,
-    required: true,
-  },
-
-  businessName: {
-    type: String,
-    default: "",
-  },
-
-  gstNumber: {
-    type: String,
-    default: "",
-  },
-
-  sellerState: {
-    type: String,
-    default: "",
-  },
-
-  sellerAddress: {
-    type: String,
-    default: "",
-  },
-
-  sellerPhone: {
-    type: String,
-    default: "",
-  },
-
-  sellerEmail: {
-    type: String,
-    default: "",
-  },
-
-  bankName: {
-    type: String,
-    default: "",
-  },
-
-  bankAccount: {
-    type: String,
-    default: "",
-  },
-
-  bankIfsc: {
-    type: String,
-    default: "",
-  },
-
-  bankHolder: {
-    type: String,
-    default: "",
-  },
-
-  logo: {
-    type: String,
-    default: "",
-  },
-
-  invoices: [InvoiceSchema],
-
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+const InvoiceSchema = new Schema<IInvoice>({
+  invoiceNo:    { type: String, default: "" },
+  customerName: { type: String, default: "" },
+  grandTotal:   { type: Number, default: 0 },
+  businessName: { type: String, default: "" },
+  gstNumber:    { type: String, default: "" },
+  sellerState:  { type: String, default: "" },
+  buyerState:   { type: String, default: "" },
+  products:     { type: [ProductSchema], default: [] },
+  invoiceDate:  { type: String, default: "" },
 });
 
-/* =========================
-   APP SETTINGS SCHEMA
-========================= */
+// ── Seller ────────────────────────────────────────────────────────────────────
+export interface ISeller extends Document {
+  username:      string;
+  password:      string;
+  businessName:  string;
+  gstNumber:     string;
+  sellerState:   string;
+  sellerAddress: string;
+  sellerPhone:   string;
+  sellerEmail:   string;
+  bankName:      string;
+  bankAccount:   string;
+  bankIfsc:      string;
+  bankHolder:    string;
+  logo:          string;
+  invoices:      IInvoice[];
+}
 
-const AppSettingsSchema = new Schema({
-  key: {
-    type: String,
-    required: true,
-    unique: true,
-  },
-
-  value: {
-    type: String,
-    default: "",
-  },
+const SellerSchema = new Schema<ISeller>({
+  username:      { type: String, required: true, unique: true },
+  password:      { type: String, required: true },
+  businessName:  { type: String, default: "" },
+  gstNumber:     { type: String, default: "" },
+  sellerState:   { type: String, default: "" },
+  sellerAddress: { type: String, default: "" },
+  sellerPhone:   { type: String, default: "" },
+  sellerEmail:   { type: String, default: "" },
+  bankName:      { type: String, default: "" },
+  bankAccount:   { type: String, default: "" },
+  bankIfsc:      { type: String, default: "" },
+  bankHolder:    { type: String, default: "" },
+  logo:          { type: String, default: "" },
+  invoices:      { type: [InvoiceSchema], default: [] },
 });
 
-/* =========================
-   EXPORT MODELS
-========================= */
-
-export const Seller =
-  models.Seller || model("Seller", SellerSchema);
-
-export const AppSettings =
-  models.AppSettings ||
-  model("AppSettings", AppSettingsSchema);
+export const Seller: Model<ISeller> =
+  mongoose.models.Seller ||
+  mongoose.model<ISeller>("Seller", SellerSchema);
